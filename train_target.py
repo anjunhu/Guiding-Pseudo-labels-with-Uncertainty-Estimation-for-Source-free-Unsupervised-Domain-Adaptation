@@ -306,7 +306,7 @@ def train(epoch, net, moco_model, optimizer, trainloader, banks):
         group_metrics[f'Training acc A{sa}'] += accuracy_score(y_sa.to('cpu'), logits_w_sa.to('cpu').max(1)[1])
         group_metrics[f'Training auc A{sa}'] += calculate_auc(F.softmax(logits_w_sa, dim=1)[:, 1].detach().cpu(), y_sa.to('cpu'))
 
-    pprint(group_metrics)
+    #pprint(group_metrics)
     if args.wandb:
         wandb.log({
         'train_loss': loss/len(trainloader), \
@@ -392,7 +392,7 @@ def eval_and_label_dataset(epoch, model, banks):
         group_metrics[f'Validation auc A{sa}'] = calculate_auc(F.softmax(logits_sa, dim=1)[:, 1].cpu(), y_sa.to('cpu'))
 
     print(f"\n| Test Epoch {epoch} Accuracy {acc:.4f} AUC {auc:.4f}")
-    #pprint(group_metrics)
+    pprint(group_metrics)
     log_dict, t_predictions, pred_df = calculate_metrics(probs[:, 1].detach().cpu().numpy(), gt_labels.float().squeeze().detach().cpu().numpy(),
                                                          sensitive.detach().cpu().numpy(), indices.detach().cpu().numpy(), sens_classes=5)
     log_dict['val_accuracy'] = acc
@@ -463,8 +463,8 @@ logdir = 'logs/' + args.run_name
 net = create_model(arch, args)
 momentum_net = create_model(arch, args)
 
-load_weights(net, 'logs/' + args.source + '/weights_best.tar')
-load_weights(momentum_net, 'logs/' + args.source + '/weights_best.tar')
+load_weights(net, 'logs/' + args.source + '/Tnatural_Vbalanced_weights_best.tar')
+load_weights(momentum_net, 'logs/' + args.source + '/Tnatural_Vbalanced_weights_best.tar')
 
 optimizer = optim.SGD(net.parameters(), lr=args.lr, weight_decay=5e-4)
 
@@ -478,10 +478,10 @@ train_sampler = None
 test_sampler = None
 g = torch.Generator()
 g.manual_seed(args.seed)
-if args.train_resampling and args.train_resampling != 'natural':
+if args.train_resampling:
     weights = train_dataset.get_weights(args.train_resampling, flag=args.flag)
     train_sampler = WeightedRandomSampler(weights, len(weights), replacement=True, generator=g)
-if args.test_resampling and args.test_resampling != 'natural':
+if args.test_resampling:
     test_weights = test_dataset.get_weights(args.test_resampling, flag=args.flag)
     test_sampler = WeightedRandomSampler(test_weights, len(test_weights), replacement=True, generator=g)
 
@@ -508,8 +508,8 @@ acc, banks, _, _ = eval_and_label_dataset(0, moco_model, None)
 
 for epoch in range(args.num_epochs+1):
     print("Training started!")
-    
-    train(epoch, net, moco_model, optimizer, train_loader, banks) # train net1  
+
+    train(epoch, net, moco_model, optimizer, train_loader, banks) # train net1
 
     acc, banks, gt_labels, pred_labels = eval_and_label_dataset(epoch, moco_model, banks)
 

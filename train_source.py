@@ -24,7 +24,7 @@ parser.add_argument('--num_class', default=10, type=int)
 
 parser.add_argument('--batch_size', default=256, type=int, help='train batchsize') 
 parser.add_argument('--lr', '--learning_rate', default=0.001, type=float, help='initial learning rate')
-parser.add_argument('--num_epochs', default=300, type=int)
+parser.add_argument('--num_epochs', default=75, type=int)
 parser.add_argument('--train_resampling', default='balanced', choices=['natural', 'class', 'group', 'balanced'], type=str, help='')
 parser.add_argument('--test_resampling', default='balanced', choices=['natural', 'class', 'group', 'balanced'], type=str, help='')
 parser.add_argument('--flag', default='', choices=['', 'Younger', 'Older'], type=str, help='')
@@ -35,6 +35,7 @@ parser.add_argument('--seed', default=123)
 parser.add_argument('--gpuid', default=0, type=int)
 
 parser.add_argument('--run_name', type=str)
+parser.add_argument('--proj_name', type=str, default='Guiding Pseudo-labels with Uncertainty Estimation for Test-Time Adaptation')
 parser.add_argument('--wandb', action='store_true', help="Use wandb")
 
 args = parser.parse_args()
@@ -45,7 +46,7 @@ torch.manual_seed(args.seed)
 torch.cuda.manual_seed_all(args.seed)
 
 if args.wandb:
-    wandb.init(project="Guiding Pseudo-labels with Uncertainty Estimation for Test-Time Adaptation", name = args.run_name)
+    wandb.init(project=args.proj_name, name=args.run_name, config=args)
 
 
 def smoothed_cross_entropy(logits, labels, num_classes, epsilon=0):
@@ -185,6 +186,7 @@ def test(epoch,net):
     log_dict, t_predictions, pred_df = calculate_metrics(probs.numpy(), tol_targets.float().numpy(), tol_sensitive.numpy(), tol_indices.numpy(), sens_classes=5)
     log_dict['val_accuracy'] = acc
     log_dict['val_auc'] = auc
+    log_dict.update(group_metrics)
     if args.wandb:
         wandb.log(log_dict, step=epoch)
 
@@ -279,7 +281,7 @@ for epoch in range(args.num_epochs+1):
     acc = test(epoch,net) 
 
     if acc > best:
-        save_weights(net, epoch, logdir + '/weights_best.tar')
+        save_weights(net, epoch, logdir + f'/T{args.train_resampling}_V{args.test_resampling}_weights_best.tar')
         best = acc
         print("Saving best!")
 

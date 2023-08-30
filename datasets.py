@@ -26,13 +26,13 @@ normalize = transforms.Normalize(
         )
 
 class dataset(Dataset):
-    def __init__(self, dataset, root, mode, transform, noisy_path=None):
+    def __init__(self, dataset, root, mode, transform, noisy_path=None, sens_classes=5):
         self.dataset = dataset
         self.root = root
         self.mode = mode
         self.transform = transform
         self.noisy_path = noisy_path
-    
+        self.sens_classes = sens_classes
         self.parse_dataset()
 
     def parse_dataset(self):
@@ -180,7 +180,7 @@ class dataset(Dataset):
             
             data = np.concatenate((train_set.data, test_set.data))
             labels = np.concatenate((train_set.labels, test_set.labels))
-            sensitives = np.concatenate((train_set.sensitives, test_set.sensitives))  
+            sensitives = np.concatenate((train_set.sensitives, test_set.sensitives)) 
 
         else:
             train = True if self.mode == 'train' else False
@@ -242,10 +242,10 @@ class dataset(Dataset):
     def __len__(self) -> int:
         return len(self.data)
 
-    def group_counts(self, resample_which='balanced', flag=''):
-        if resample_which == 'group' or resample_which == 'balanced':
+    def group_counts(self, resample_which, flag=''):
+        if resample_which == 'group' or resample_which == 'balanced' or resample_which == 'natural':
             group_array = self.sensitives.tolist()
-            if resample_which == 'balanced':
+            if resample_which == 'balanced' or resample_which == 'natural':
                 labels = self.labels.tolist()
                 num_labels = len(set(labels))
                 num_groups = len(set(group_array))
@@ -261,21 +261,27 @@ class dataset(Dataset):
             self._group_counts = (torch.arange(num_labels * num_groups).unsqueeze(1)==self._group_array).sum(1).float()
         elif resample_which == 'class':
             self._group_counts = (torch.arange(num_labels).unsqueeze(1)==self._group_array).sum(1).float()
+        elif resample_which == 'natural':
+            self._group_counts = (torch.arange(num_labels * num_groups).unsqueeze(1)==self._group_array).sum(1).float()
+            self._group_counts = torch.ones_like(self._group_counts)
 
-        if 'Younger' in flag:
+        if 'Younger' in flag and resample_which in ['group', 'balanced', 'natural']:
             self._group_counts[-1] *= 10
             self._group_counts[-2] *= 10
-            self._group_counts[-3] *= 10
-            self._group_counts[-4] *= 10
-        if 'Older' in flag:
+            if resample_which == 'balanced' or resample_which == 'natural':
+                self._group_counts[-3] *= 10
+                self._group_counts[-4] *= 10
+        if 'Older' in flag and resample_which in ['group', 'balanced', 'natural']:
             self._group_counts[-1] /= 10
             self._group_counts[-2] /= 10
-            self._group_counts[-3] /= 10
-            self._group_counts[-4] /= 10
+            if resample_which == 'balanced' or resample_which == 'natural':
+                self._group_counts[-3] /= 10
+                self._group_counts[-4] /= 10
+
         return group_array, self._group_counts
 
     def get_weights(self, resample_which, flag=''):
         sens_attr, group_num = self.group_counts(resample_which, flag)
-        group_weights = [1/x.item() for x in group_num]
+        group_weights = [1/max(1, x.item()) for x in group_num]
         sample_weights = [group_weights[int(i)] for i in sens_attr]
         return sample_weights
